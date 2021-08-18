@@ -87,10 +87,10 @@ class ImageRequest {
                     this.outputFormat = outputFormat;
                 }
             }
-            
+
             // Fix quality for Thumbor and Custom request type if outputFormat is different from quality type.
             if (this.outputFormat) {
-                const requestType = ['Custom', 'Thumbor'];
+                const requestType = ['Custom', 'Thumbor', 'Imgix'];
                 const acceptedValues = ['jpeg', 'png', 'webp', 'tiff', 'heif'];
 
                 this.ContentType = `image/${this.outputFormat}`;
@@ -182,22 +182,12 @@ class ImageRequest {
                         message: 'The bucket you specified could not be accessed. Please check that the bucket is specified in your SOURCE_BUCKETS.'
                     });
                 }
-            } else {
-                // Try to use the default image source bucket env var
-                const sourceBuckets = this.getAllowedSourceBuckets();
-                return sourceBuckets[0];
             }
-        } else if (requestType === "Thumbor" || requestType === "Custom") {
-            // Use the default image source bucket env var
-            const sourceBuckets = this.getAllowedSourceBuckets();
-            return sourceBuckets[0];
-        } else {
-            throw ({
-                status: 404,
-                code: 'ImageBucket::CannotFindBucket',
-                message: 'The bucket you specified could not be found. Please check the spelling of the bucket name in your request.'
-            });
         }
+
+        // Use the default image source bucket env var
+        const sourceBuckets = this.getAllowedSourceBuckets();
+        return sourceBuckets[0];
     }
 
     /**
@@ -212,6 +202,14 @@ class ImageRequest {
         } else if (requestType === "Thumbor") {
             const thumborMapping = new ThumborMapping();
             thumborMapping.process(event);
+            return thumborMapping.edits;
+        } else if (requestType === "Imgix") {
+            const thumborMapping = new ThumborMapping();
+            const width = event.queryStringParameters.w || event.queryStringParameters["max-w"] || 0;
+            const height = event.queryStringParameters.h || event.queryStringParameters["max-h"] || 0;
+            const upscale = (event.queryStringParameters["max-w"] || event.queryStringParameters["max-h"]) ? "/filters:no_upscale()" : "";
+            const parsedPath = `/${width}x${height}${upscale}${event.path}`;
+            thumborMapping.process({path: parsedPath});
             return thumborMapping.edits;
         } else if (requestType === "Custom") {
             const thumborMapping = new ThumborMapping();
@@ -240,7 +238,7 @@ class ImageRequest {
             return decoded.key;
         }
 
-        if (requestType === "Thumbor" || requestType === "Custom") {
+        if (requestType === "Thumbor" || requestType === "Imgix" || requestType === "Custom") {
             let { path } = event;
 
             if (requestType === "Custom") {
@@ -294,9 +292,11 @@ class ImageRequest {
         } catch(error) {
             console.error(error);
             isBase64Encoded = false;
-        } 
+        }
 
-        if (matchDefault.test(path) && isBase64Encoded) {  // use sharp
+        if (event.queryStringParameters && (event.queryStringParameters.w || event.queryStringParameters.h || event.queryStringParameters["max-w"] || event.queryStringParameters["max-h"])) {
+            return 'Imgix';
+        } else if (matchDefault.test(path) && isBase64Encoded) {  // use sharp
             return 'Default';
         } else if (matchCustom.test(path) && definedEnvironmentVariables) {  // use rewrite function then thumbor mappings
             return 'Custom';
@@ -306,7 +306,7 @@ class ImageRequest {
             throw {
                 status: 400,
                 code: 'RequestTypeError',
-                message: 'The type of request you are making could not be processed. Please ensure that your original image is of a supported file type (jpg, png, tiff, webp, svg) and that your image request is provided in the correct syntax. Refer to the documentation for additional guidance on forming image requests.'
+                message: `HELLO ERROR: ${event} ${event.path} ${event.queryStringParameters}. The type of request you are making could not be processed. Please ensure that your original image is of a supported file type (jpg, png, tiff, webp, svg) and that your image request is provided in the correct syntax. Refer to the documentation for additional guidance on forming image requests.`
             };
         }
     }
@@ -382,7 +382,7 @@ class ImageRequest {
     * @param {Object} event - The request body.
     */
     getOutputFormat(event) {
-        const autoWebP = process.env.AUTO_WEBP;
+        const autoWebP = event.queryStringParameters.format !== 'off' && process.env.AUTO_WEBP;
         if (autoWebP === 'Yes' && event.headers.Accept && event.headers.Accept.includes('image/webp')) {
             return 'webp';
         } else if (this.requestType === 'Default') {
@@ -411,7 +411,7 @@ class ImageRequest {
             status: 500,
             code: 'RequestTypeError',
             message: 'The file does not have an extension and the file type could not be inferred. Please ensure that your original image is of a supported file type (jpg, png, tiff, webp, svg). Refer to the documentation for additional guidance on forming image requests.'
-        };   
+        };
     }
 }
 }

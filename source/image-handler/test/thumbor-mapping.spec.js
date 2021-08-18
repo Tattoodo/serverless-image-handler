@@ -163,6 +163,45 @@ describe('process()', function() {
 // parseCustomPath()
 // ----------------------------------------------------------------------------
 describe('parseCustomPath()', function() {
+    describe('001/Imgix', function() {
+        it('Should pass if the proper edit translations are applied and in the correct order', function() {
+            const event = {
+                path : '/images/test.jpg',
+                queryStringParameters: { w: '200', h: '300' }
+            }
+
+            const path = `/${event.queryStringParameters.w ?? 0}x${event.queryStringParameters.h ?? 0}${event.path}`;
+            event.path = path;
+            const expectedResult = '/200x300/images/test.jpg';
+            expect(event.path).toEqual(expectedResult);
+        });
+    });
+    describe('002/Imgix', function() {
+        it('Should pass if the proper edit translations are applied and in the correct order', function() {
+            const event = {
+                path : '/images/test.jpg',
+                queryStringParameters: { w: '200' }
+            }
+
+            const path = `/${event.queryStringParameters.w ?? 0}x${event.queryStringParameters.h ?? 0}${event.path}`;
+            event.path = path;
+            const expectedResult = '/200x0/images/test.jpg';
+            expect(event.path).toEqual(expectedResult);
+        });
+    });
+    describe('003/Imgix', function() {
+        it('Should pass if the proper edit translations are applied and in the correct order', function() {
+            const event = {
+                path : '/images/test.jpg',
+                queryStringParameters: { h: '300' }
+            }
+
+            const path = `/${event.queryStringParameters.w ?? 0}x${event.queryStringParameters.h ?? 0}${event.path}`;
+            event.path = path;
+            const expectedResult = '/0x300/images/test.jpg';
+            expect(event.path).toEqual(expectedResult);
+        });
+    });
     describe('001/validPath', function() {
         it('Should pass if the proper edit translations are applied and in the correct order', function() {
             const event = {
